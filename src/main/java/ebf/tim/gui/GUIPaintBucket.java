@@ -2,6 +2,7 @@ package ebf.tim.gui;
 
 
 import ebf.tim.TrainsInMotion;
+import ebf.tim.api.SkinRegistry;
 import ebf.tim.api.TransportSkin;
 import ebf.tim.entities.GenericRailTransport;
 import ebf.tim.networking.PacketPaint;
@@ -18,10 +19,7 @@ import org.lwjgl.input.Keyboard;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.Project;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 /**
  *@author Oskiek
@@ -67,6 +65,8 @@ public class GUIPaintBucket extends GuiScreen {
                     skinList.add(s.modid + ":" + s.name);
                 }
             }
+            currentTransportSkin = entity.getCurrentSkin();
+            page = skinList.indexOf(currentTransportSkin.modid + ":" + currentTransportSkin.getName());
         }
 
         Keyboard.enableRepeatEvents(true);
@@ -181,6 +181,27 @@ public class GUIPaintBucket extends GuiScreen {
 
                             @Override
                             public FontRenderer getFont(){return fontRendererObj;}
+                        }
+                );
+                buttonList.add(
+                        new GUIButton(percentLeft(83) - 61, percentTop(56), 40, 20, "Random") {
+                            @Override
+                            public String getHoverText() {
+                                return "Randomize Skin";
+                            }
+
+                            @Override
+                            public void onClick() {
+                                TransportSkin random = SkinRegistry.getTransportSkins(entity.getClass()).get(SkinRegistry.getTransportSkins(entity.getClass()).keySet().toArray()[new Random().nextInt(SkinRegistry.getTransportSkins(entity.getClass()).keySet().size())]);
+                                page = skinList.indexOf(random.modid + ":" + random.getName());
+                                TrainsInMotion.keyChannel.sendToServer(new PacketPaint(skinList.get(page), entity.getEntityId()));
+                                mc.displayGuiScreen(null);
+                            }
+
+                            @Override
+                            public FontRenderer getFont() {
+                                return fontRendererObj;
+                            }
                         }
                 );
                 break;

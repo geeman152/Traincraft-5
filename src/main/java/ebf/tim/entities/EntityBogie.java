@@ -247,6 +247,22 @@ public class EntityBogie extends EntityMinecart implements IMinecart, IRoutableC
             //update using spline movement
             //} else if (block instanceof BlockRailBase)
 
+            if(!(block instanceof BlockRailBase)){
+                if(CommonUtil.getBlockAt(getWorld(), xFloor, yFloor+1, zFloor) instanceof BlockRailBase) {
+                    prevPosY=posY;
+                    posY++;
+                    yFloor++;
+                    block = CommonUtil.getBlockAt(getWorld(), xFloor, yFloor, zFloor);
+                } else if(CommonUtil.getBlockAt(getWorld(), xFloor, yFloor-1, zFloor) instanceof BlockRailBase) {
+                    prevPosY=posY;
+                    posY--;
+                    yFloor--;
+                    block = CommonUtil.getBlockAt(getWorld(), xFloor, yFloor, zFloor);
+                } else if(block instanceof BlockAir) {
+                    moveOffRail();
+                }
+            }
+
             //update on normal rails
             if (block instanceof BlockRailBase) {
                 this.yOffset=(block instanceof BlockRailCore?0.425f:0.3425f);
@@ -256,12 +272,6 @@ public class EntityBogie extends EntityMinecart implements IMinecart, IRoutableC
             //} else if (block instanceof ITrackBase) {
                 //update position for ZnD rails.
                 //moveBogieZnD(motionX, motionZ, floorX, floorY, floorZ, (ITrackBase) block);
-            } else if(block instanceof BlockAir) {
-                moveOffRail();
-            } else if(CommonUtil.getBlockAt(getWorld(), xFloor, yFloor+1, zFloor) instanceof BlockRailBase) {
-                prevPosY=posY;
-                posY++;
-                yFloor++;
             }
            velocity[2]=0;velocity[3]=0;
         }

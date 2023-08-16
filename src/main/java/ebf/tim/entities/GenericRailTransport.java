@@ -57,6 +57,7 @@ import java.util.*;
 
 import static ebf.tim.TrainsInMotion.transportTypes.*;
 import static ebf.tim.utility.CommonUtil.radianF;
+import static ebf.tim.utility.CommonUtil.rotatePoint;
 
 /**
  * <h1>Generic Rail Transport</h1>
@@ -121,7 +122,7 @@ public class GenericRailTransport extends EntityMinecart implements IEntityAddit
     /**calculated movement speed, first value is used for GUI and speed, second is used for render effects.*/
     @Deprecated //TODO: value 1 gets the number right more often, but value 2 gets direction right. HOW
     public float[] velocity=new float[]{0,0};
-    public int forceBackupTimer =0, syncTimer=0;
+    public int forceBackupTimer =0, syncTimer=0, deathTick=0;
     public float pullingWeight=0;
 
     private float ticksSinceLastVelocityChange=1;
@@ -635,7 +636,8 @@ public class GenericRailTransport extends EntityMinecart implements IEntityAddit
         }
 
         //on Destruction
-        if (health<1 && !getWorld().isRemote){
+        if (health<1 && !getWorld().isRemote && deathTick==0){
+            deathTick=this.ticksExisted;
             //since it was a player be sure we remove the entity from the logging.
             ServerLogger.deleteWagon(this);
             //be sure we drop the inventory items on death.
@@ -953,12 +955,12 @@ public class GenericRailTransport extends EntityMinecart implements IEntityAddit
      * if X or Z is null, the bogie's existing motion velocity will be used
      */
     public void finalMove(){
-        backBogie.minecartMove(this);
-        cachedVectors[1] = new Vec3f(rotationPoints()[1], 0, 0).rotatePoint(rotationPitch, rotationYaw, 0)
+        cachedVectors[1] = new Vec3f(-rotationPoints()[0], 0, 0).rotatePoint(0, rotationYaw, 0)
                 .addVector(backBogie.posX,backBogie.posY,backBogie.posZ);
         setPosition(cachedVectors[1].xCoord, cachedVectors[1].yCoord,cachedVectors[1].zCoord);
 
         frontBogie.minecartMove(this);
+        backBogie.minecartMove(this);
         //reset the y coord so they will re-calculate the yaw
         if(hasDrag()) {
             applyDrag();
@@ -996,21 +998,31 @@ public class GenericRailTransport extends EntityMinecart implements IEntityAddit
      */
     @Override
     public void applyDrag(){
-        float drag = 0.9998f,brakeBuff=0,slope=0;
-        //iterate the consist to collect the stats, since only end units can do this.
+        boolean canSlope=true;
+        float drag = 0.9998f, brakeBuff = 0, slope = 0;
+        //check if lope things can be done at all
         for(GenericRailTransport stock : getConsist()) {
-            if(stock.getBoolean(boolValues.BRAKE)){
-                //realistically would be more like 2.4, but 5 makes gameplay more dramatic
-                brakeBuff+=stock.weightKg()*5.0f;
+            if(stock!=this && getAccelerator()!=0){
+                canSlope=false;
+                break;
             }
-            if(stock.rotationPitch!=0){
+        }
+        if(canSlope) {
+            if (getBoolean(boolValues.BRAKE)) {
+                //realistically would be more like 2.4, but 5 makes gameplay more dramatic
+                brakeBuff += weightKg() * 5.0f;
+            }
+            if (rotationPitch != 0) {
                 //vanilla uses 0.0078125 per tick for slope speed.
                 //0.00017361 would be that divided by 45 since vanilla slopes are 45 degree angles.
                 //scale by entity pitch
                 //pitch goes from -90 to 90, so it's inherently directional, stop that.
-                slope+=(0.00017361f)*Math.abs(stock.rotationPitch);
+                slope += (0.00017361f) * Math.abs(rotationPitch);
             }
+            appendMovement(slope * MathHelper.sin((rotationYaw-90)*radianF));
         }
+
+        //now do drag stuff
 
         //scale drag for derail, or air lateral friction. if you do both at the same time then it's way too much.
         if(getBoolean(boolValues.DERAILED)){
@@ -1031,7 +1043,6 @@ public class GenericRailTransport extends EntityMinecart implements IEntityAddit
             drag = 0f;
         }
 
-        appendMovement(slope * MathHelper.sin((rotationYaw-90)*radianF));
         for(GenericRailTransport t : getConsist()){
             t.frontBogie.drag(t,drag);
             t.backBogie.drag(t,drag);
@@ -1210,6 +1221,11 @@ public class GenericRailTransport extends EntityMinecart implements IEntityAddit
             if(backLinkedID!=null && getWorld().getEntityByID(backLinkedID) instanceof GenericRailTransport){
                manageLink((GenericRailTransport) getWorld().getEntityByID(backLinkedID));
             }
+            //for some off reason, this madness works pretty reliably from my tests.
+            cachedVectors[1]=new Vec3f(rotationPoints()[1],0,0).rotatePoint(0,rotationYaw,0)
+                    .addVector(posX,0,posZ).subtract((float)frontBogie.posX,0,(float)frontBogie.posZ);
+            frontBogie.velocity[2]+=cachedVectors[1].xCoord;
+            frontBogie.velocity[3]+=cachedVectors[1].zCoord;
             updatePosition();
 
             if(collisionHandler!=null){
